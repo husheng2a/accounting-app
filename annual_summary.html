@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>年度汇总报表</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 { text-align: center; margin-bottom: 25px; }
+    
+    .filter-section {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 25px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .filter-row {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 16px;
+    }
+    
+    .filter-row label {
+      font-weight: 600;
+      margin-right: 8px;
+    }
+    
+    .filter-row select {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+      min-width: 120px;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      background: #4a6cf7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    .btn:hover { opacity: 0.9; }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: right;
+      border-bottom: 1px solid #eee;
+    }
+    th:first-child, td:first-child {
+      text-align: left;
+    }
+    th { background: #f8f9fa; font-weight: 600; }
+    .total-row { font-weight: bold; background: #f0f0f0; }
+    
+    .nav-link {
+      display: block;
+      text-align: center;
+      margin-bottom: 20px;
+      color: #4a6cf7;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <a href="records_test.html" class="nav-link">返回记录查询</a>
+  <h1>📊 年度汇总报表</h1>
+
+  <div class="filter-section">
+    <div class="filter-row">
+      <label>年份：</label>
+      <select id="yearFilter" class="form-control">
+        <!-- 动态填充年份 -->
+      </select>
+      
+      <label>类别：</label>
+      <select id="categoryFilter" class="form-control">
+        <option value="">全部</option>
+        <option value="收入">收入</option>
+        <option value="支出">支出</option>
+      </select>
+      
+      <button class="btn" onclick="generateReport()">生成报表</button>
+    </div>
+  </div>
+
+  <div id="reportContainer"></div>
+
+  <script>
+    let records = JSON.parse(localStorage.getItem('accountingRecords') || '[]');
+    
+    function getYears() {
+      const years = new Set();
+      records.forEach(r => {
+        if (r.date) {
+          const year = r.date.split('-')[0];
+          years.add(year);
+        }
+      });
+      return Array.from(years).sort((a, b) => b - a);
+    }
+    
+    function populateYearFilter() {
+      const years = getYears();
+      const select = document.getElementById('yearFilter');
+      select.innerHTML = '';
+      years.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        select.appendChild(option);
+      });
+      
+      // 默认选中最新年份
+      if (years.length > 0) {
+        select.value = years[0];
+      }
+    }
+    
+    function generateReport() {
+      const year = document.getElementById('yearFilter').value;
+      const category = document.getElementById('categoryFilter').value;
+      
+      if (!year) {
+        document.getElementById('reportContainer').innerHTML = '<p>请选择年份</p>';
+        return;
+      }
+      
+      // 获取所有项目
+      const projects = new Set();
+      records.forEach(r => {
+        if (r.date && r.date.startsWith(year)) {
+          if (category && r.category !== category) return;
+          if (r.project) projects.add(r.project);
+        }
+      });
+      
+      if (projects.size === 0) {
+        document.getElementById('reportContainer').innerHTML = '<p>该年份无匹配数据</p>';
+        return;
+      }
+      
+      // 初始化项目月度数据
+      const projectData = {};
+      projects.forEach(project => {
+        projectData[project] = {};
+        for (let month = 1; month <= 12; month++) {
+          projectData[project][month] = 0;
+        }
+      });
+      
+      // 填充数据
+      records.forEach(r => {
+        if (r.date && r.date.startsWith(year)) {
+          if (category && r.category !== category) return;
+          if (!r.project) return;
+          
+          const recordMonth = parseInt(r.date.split('-')[1]);
+          const amount = parseFloat(r.amount) || 0;
+          
+          // 支出显示为负数
+          const displayAmount = r.category === '收入' ? amount : -amount;
+          projectData[r.project][recordMonth] += displayAmount;
+        }
+      });
+      
+      // 计算月度合计
+      const monthlyTotals = {};
+      for (let month = 1; month <= 12; month++) {
+        monthlyTotals[month] = 0;
+      }
+      let grandTotal = 0;
+      
+      Array.from(projects).forEach(project => {
+        let annualTotal = 0;
+        for (let month = 1; month <= 12; month++) {
+          const amount = projectData[project][month];
+          monthlyTotals[month] += amount;
+          annualTotal += amount;
+        }
+        grandTotal += annualTotal;
+      });
+      
+      // 生成表格
+      let tableHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+      `;
+      
+      // 月份列头
+      for (let month = 1; month <= 12; month++) {
+        tableHTML += `<th>${month}月</th>`;
+      }
+      tableHTML += `<th>年度总计</th></tr></thead><tbody>`;
+      
+      // 项目行
+      Array.from(projects).sort().forEach(project => {
+        tableHTML += `<tr><td>${project}</td>`;
+        let annualTotal = 0;
+        
+        for (let month = 1; month <= 12; month++) {
+          const amount = projectData[project][month];
+          annualTotal += amount;
+          const color = amount >= 0 ? '#2e8b57' : '#dc3545';
+          tableHTML += `<td style="color:${color}">¥${Math.abs(amount).toFixed(2)}${amount >= 0 ? '' : ''}</td>`;
+        }
+        
+        const totalColor = annualTotal >= 0 ? '#2e8b57' : '#dc3545';
+        tableHTML += `<td style="color:${totalColor}; font-weight:bold;">¥${Math.abs(annualTotal).toFixed(2)}</td></tr>`;
+      });
+      
+      // 月度合计行
+      tableHTML += `<tr class="total-row"><td><strong>月度合计</strong></td>`;
+      for (let month = 1; month <= 12; month++) {
+        const total = monthlyTotals[month];
+        const color = total >= 0 ? '#2e8b57' : '#dc3545';
+        tableHTML += `<td style="color:${color}; font-weight:bold;">¥${Math.abs(total).toFixed(2)}</td>`;
+      }
+      tableHTML += `<td style="font-weight:bold;">¥${Math.abs(grandTotal).toFixed(2)}</td></tr>`;
+      
+      tableHTML += `</tbody></table>`;
+      document.getElementById('reportContainer').innerHTML = tableHTML;
+    }
+    
+    // 初始化
+    populateYearFilter();
+    generateReport();
+  </script>
+</body>
+</html>

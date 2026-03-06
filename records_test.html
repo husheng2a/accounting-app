@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>记账本 - 所有记录</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 { text-align: center; margin-bottom: 25px; }
+    
+    .summary {
+      background: white;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 25px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 16px;
+    }
+    .summary-table th, .summary-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    .summary-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border-radius: 8px;
+      overflow: hidden;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    th:nth-child(1), td:nth-child(1) { width: 12%; } /* 日期 */
+    th:nth-child(2), td:nth-child(2) { width: 8%; }  /* 类别 */
+    th:nth-child(3), td:nth-child(3) { width: 12%; } /* 项目 */
+    th:nth-child(4), td:nth-child(4) { width: 8%; }  /* 凭证 */
+    th:nth-child(5), td:nth-child(5) { width: 14%; } /* 支付方式 */
+    th:nth-child(6), td:nth-child(6) { width: 12%; } /* 金额 */
+    th:nth-child(7), td:nth-child(7) { width: 29%; } /* 备注 */
+    th:nth-child(8), td:nth-child(8) { width: 15%; } /* 操作 */
+    th { background: #f8f9fa; font-weight: 600; }
+    .income { color: #2e8b57; font-weight: 600; }
+    .expense { color: #dc3545; font-weight: 600; }
+    tr:hover { background-color: #f9f9f9; }
+    
+    .filter-section {
+      background: white;
+      padding: 18px;
+      border-radius: 10px;
+      margin-bottom: 25px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .filter-row {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .btn {
+      padding: 8px 16px;
+      background: #4a6cf7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .export-btn { background: #28a745; }
+    
+    .nav-link {
+      display: block;
+      text-align: center;
+      margin-bottom: 20px;
+      color: #4a6cf7;
+      text-decoration: underline;
+    }
+    
+    .table-container {
+      max-height: 500px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 20px;">
+    <a href="accounting_test.html" class="nav-link" style="margin:0;">返回添加记录</a>
+    <a href="annual_summary.html" class="nav-link" style="margin:0;">年度汇总报表</a>
+  </div>
+  <h1>📊 所有记账记录</h1>
+
+  <div class="summary" id="summary">
+    暂无数据
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-row">
+      <label>日期范围：</label>
+      <input type="date" id="startDate" />
+      <span style="margin: 0 10px;">至</span>
+      <input type="date" id="endDate" />
+      <button class="btn" onclick="filterRecords()">查询</button>
+      <button class="btn" style="background:#6c757d;" onclick="clearFilter()">清除筛选</button>
+      <button class="btn export-btn" onclick="exportCSV()">导出 CSV</button>
+    </div>
+    <div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">
+      <label>批量导入：</label>
+      <input type="file" id="importFile" accept=".csv" style="display:inline-block; width:auto; margin-right:10px;" />
+      <button class="btn" style="background:#17a2b8;" onclick="importCSV()">导入数据</button>
+      <a href="accounting_form_test.csv" download="记账模板.csv" style="margin-left:10px; color:#17a2b8; text-decoration:underline;">下载模板</a>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table id="recordsTable">
+      <thead>
+        <tr>
+          <th>日期</th>
+          <th>类别</th>
+          <th>项目</th>
+          <th>凭证</th>
+          <th>支付方式</th>
+          <th>金额</th>
+          <th>备注</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="recordsBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let records = JSON.parse(localStorage.getItem('accountingRecords') || '[]');
+
+    function saveRecords() {
+      localStorage.setItem('accountingRecords', JSON.stringify(records));
+      render();
+    }
+
+    function getVoucherNumber(date) {
+      const yearMonth = date.substring(0, 7);
+      const monthRecords = records.filter(r => r.date.startsWith(yearMonth));
+      return String(monthRecords.length + 1).padStart(3, '0');
+    }
+
+    function deleteRecord(id) {
+      if (confirm('确定删除这条记录？')) {
+        records = records.filter(r => r.id !== id);
+        saveRecords();
+      }
+    }
+
+    function editRecord(id) {
+      const record = records.find(r => r.id === id);
+      if (!record) return;
+
+      localStorage.setItem('editingRecord', JSON.stringify(record));
+      window.location.href = 'accounting_test.html';
+    }
+
+    function getPreviousDay(dateStr) {
+      const date = new Date(dateStr);
+      date.setDate(date.getDate() - 1);
+      return date.toISOString().split('T')[0];
+    }
+
+    function calculatePeriodSummary(startDate, endDate) {
+      const previousDay = getPreviousDay(startDate);
+      const priorRecords = records.filter(r => r.date <= previousDay);
+      
+      const summary = {};
+      const allPayments = [...new Set(records.map(r => r.payment))];
+      allPayments.forEach(payment => {
+        summary[payment] = {
+          priorBalance: 0,
+          income: 0,
+          expense: 0,
+          currentBalance: 0
+        };
+      });
+
+      priorRecords.forEach(r => {
+        if (!summary[r.payment]) {
+          summary[r.payment] = { priorBalance: 0, income: 0, expense: 0, currentBalance: 0 };
+        }
+        summary[r.payment].priorBalance += (r.category === '收入' ? r.amount : -r.amount);
+      });
+
+      const periodRecords = records.filter(r => r.date >= startDate && r.date <= endDate);
+      periodRecords.forEach(r => {
+        if (!summary[r.payment]) {
+          summary[r.payment] = { priorBalance: 0, income: 0, expense: 0, currentBalance: 0 };
+        }
+        if (r.category === '收入') {
+          summary[r.payment].income += r.amount;
+        } else {
+          summary[r.payment].expense += r.amount;
+        }
+      });
+
+      for (const payment in summary) {
+        summary[payment].currentBalance = 
+          summary[payment].priorBalance + 
+          summary[payment].income - 
+          summary[payment].expense;
+      }
+
+      return summary;
+    }
+
+    function render() {
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      
+      let filteredRecords = [];
+      let summaryData = {};
+      
+      if (startDate && endDate) {
+        filteredRecords = records.filter(r => r.date >= startDate && r.date <= endDate);
+        summaryData = calculatePeriodSummary(startDate, endDate);
+        
+        // 显示期间汇总表格
+        let tableHTML = `
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>支付方式</th>
+                <th>上期余额</th>
+                <th>本期收入</th>
+                <th>本期支出</th>
+                <th>期末余额</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        for (const [payment, data] of Object.entries(summaryData)) {
+          tableHTML += `
+            <tr>
+              <td>${payment}</td>
+              <td>¥${data.priorBalance.toFixed(2)}</td>
+              <td>¥${data.income.toFixed(2)}</td>
+              <td>¥${data.expense.toFixed(2)}</td>
+              <td>¥${data.currentBalance.toFixed(2)}</td>
+            </tr>
+          `;
+        }
+        
+        const totalPrior = Object.values(summaryData).reduce((sum, d) => sum + d.priorBalance, 0);
+        const totalIncome = Object.values(summaryData).reduce((sum, d) => sum + d.income, 0);
+        const totalExpense = Object.values(summaryData).reduce((sum, d) => sum + d.expense, 0);
+        const totalCurrent = Object.values(summaryData).reduce((sum, d) => sum + d.currentBalance, 0);
+        
+        if (Object.keys(summaryData).length > 1) {
+          tableHTML += `
+            <tr style="border-top: 2px solid #000; font-weight: bold;">
+              <td>合计</td>
+              <td>¥${totalPrior.toFixed(2)}</td>
+              <td>¥${totalIncome.toFixed(2)}</td>
+              <td>¥${totalExpense.toFixed(2)}</td>
+              <td>¥${totalCurrent.toFixed(2)}</td>
+            </tr>
+          `;
+        }
+        
+        tableHTML += `
+            </tbody>
+          </table>
+        `;
+        
+        document.getElementById('summary').innerHTML = tableHTML;
+      } else {
+        // 显示全部数据时，显示总余额
+        const balances = {};
+        records.forEach(r => {
+          if (!balances[r.payment]) balances[r.payment] = 0;
+          balances[r.payment] += (r.category === '收入' ? r.amount : -r.amount);
+        });
+        
+        if (Object.keys(balances).length === 0) {
+          document.getElementById('summary').innerHTML = '暂无数据';
+        } else {
+          let tableHTML = `
+            <table class="summary-table">
+              <thead>
+                <tr>
+                  <th>支付方式</th>
+                  <th>总余额</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+          
+          for (const [payment, balance] of Object.entries(balances)) {
+            tableHTML += `
+              <tr>
+                <td>${payment}</td>
+                <td>¥${balance.toFixed(2)}</td>
+              </tr>
+            `;
+          }
+          
+          if (Object.keys(balances).length > 1) {
+            const total = Object.values(balances).reduce((sum, balance) => sum + balance, 0);
+            tableHTML += `
+              <tr style="border-top: 2px solid #000; font-weight: bold;">
+                <td>合计</td>
+                <td>¥${total.toFixed(2)}</td>
+              </tr>
+            `;
+          }
+          
+          tableHTML += `
+              </tbody>
+            </table>
+          `;
+          
+          document.getElementById('summary').innerHTML = tableHTML;
+        }
+        
+        filteredRecords = records;
+      }
+
+      const tbody = document.getElementById('recordsBody');
+      tbody.innerHTML = filteredRecords
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .map(r => `
+          <tr>
+            <td>${r.date}</td>
+            <td>${r.category}</td>
+            <td>${r.project || '—'}</td>
+            <td>
+              ${r.voucher}
+              ${r.voucherImage ? `<br><img src="${r.voucherImage}" alt="凭证" style="max-width:100px; max-height:80px; margin-top:5px;">` : ''}
+            </td>
+            <td>${r.payment || '—'}</td>
+            <td class="${r.category === '收入' ? 'income' : 'expense'}">
+              ${r.category === '收入' ? '+' : '−'}¥${r.amount.toFixed(2)}
+            </td>
+            <td>${r.note || '—'}</td>
+            <td>
+              <button class="btn" style="background:#007bff;padding:4px 8px;font-size:13px;margin-right:5px;" onclick="editRecord(${r.id})">修改</button>
+              <button class="btn" style="background:#dc3545;padding:4px 8px;font-size:13px;" onclick="deleteRecord(${r.id})">删除</button>
+            </td>
+          </tr>
+        `).join('');
+    }
+
+    function filterRecords() {
+      render();
+    }
+
+    function clearFilter() {
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      render();
+    }
+
+    function setDefaultDateRange() {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      
+      document.getElementById('startDate').value = `${year}-${month}-01`;
+      document.getElementById('endDate').value = `${year}-${month}-${day}`;
+    }
+
+    function exportCSV() {
+      if (records.length === 0) {
+        alert('没有数据可导出');
+        return;
+      }
+      let csv = '日期,类别,项目,支付方式,金额,备注\n';
+      csv += records.map(r =>
+        `"${r.date}",${r.category},"${r.project.replace(/"/g, '""')}","${r.payment.replace(/"/g, '""')}",${r.amount},"${r.note.replace(/"/g, '""')}"`
+      ).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '记账记录.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function normalizeDate(dateStr) {
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        const year = parts[0];
+        const month = String(parseInt(parts[1])).padStart(2, '0');
+        const day = String(parseInt(parts[2])).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      return dateStr;
+    }
+
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      const records = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+        
+        const fields = [];
+        let inQuotes = false;
+        let current = '';
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            fields.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        fields.push(current.trim());
+        
+        if (fields.length >= 5) {
+          let date = fields[headers.indexOf('日期')] || fields[0];
+          const category = fields[headers.indexOf('类别')] || fields[1];
+          const project = fields[headers.indexOf('项目')] || fields[2] || '';
+          const payment = fields[headers.indexOf('支付方式')] || fields[3];
+          const amount = parseFloat(fields[headers.indexOf('金额')] || fields[4]);
+          const note = fields[headers.indexOf('备注')] || fields[5] || '';
+          
+          date = normalizeDate(date);
+          
+          if (date && category && payment && !isNaN(amount)) {
+            records.push({ date, category, project, payment, amount, note });
+          }
+        }
+      }
+      return records;
+    }
+
+    function importCSV() {
+      const fileInput = document.getElementById('importFile');
+      const file = fileInput.files[0];
+      if (!file) {
+        alert('请选择一个 CSV 文件');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const content = e.target.result;
+          const newRecords = parseCSV(content);
+          
+          if (newRecords.length === 0) {
+            alert('未解析到有效数据，请检查 CSV 格式');
+            return;
+          }
+
+          if (!confirm(`将导入 ${newRecords.length} 条记录，确认继续？`)) {
+            return;
+          }
+
+          newRecords.forEach(r => {
+            const voucher = getVoucherNumber(r.date);
+            records.push({
+              id: Date.now() + Math.random(),
+              ...r,
+              voucher
+            });
+          });
+
+          saveRecords();
+          fileInput.value = '';
+          alert('导入成功！');
+        } catch (err) {
+          console.error(err);
+          alert('导入失败：' + err.message);
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    setDefaultDateRange();
+    render();
+  </script>
+</body>
+</html>

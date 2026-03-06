@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>简易记账本 - 表单版</title>
+  <title>记账本 - 添加记录</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -77,70 +77,17 @@
     }
     .btn:hover { opacity: 0.9; }
     
-    .summary {
-      background: white;
-      padding: 18px;
-      border-radius: 10px;
-      margin-bottom: 25px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    .nav-link {
+      display: block;
       text-align: center;
-      font-size: 18px;
-      font-weight: 600;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    th, td {
-      padding: 12px 15px;
-      text-align: left;
-      border-bottom: 1px solid #eee;
-    }
-    th {
-      background: #f8f9fa;
-      font-weight: 600;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .income { color: #2e8b57; font-weight: 600; }
-    .expense { color: #dc3545; font-weight: 600; }
-    tr:hover { background-color: #f9f9f9; }
-    .table-container {
-      max-height: 500px;
-      overflow-y: auto;
-      margin-top: 10px;
-      border: 1px solid #eee;
-      border-radius: 8px;
-    }
-    
-    .filter-section {
-      background: white;
-      padding: 18px;
-      border-radius: 10px;
-      margin-bottom: 25px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .filter-row {
-      display: flex;
-      gap: 15px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    
-    .export-btn {
-      background: #28a745;
+      margin-top: 20px;
+      color: #4a6cf7;
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h1>⚡ 简易记账本</h1>
+  <h1>⚡ 添加记账记录</h1>
 
   <div class="form-container">
     <div class="form-row">
@@ -184,6 +131,11 @@
     </div>
     
     <div class="form-row">
+      <div class="form-label">上传凭证：</div>
+      <input type="file" id="voucherImage" accept="image/*" class="form-control" style="width: auto;" />
+    </div>
+    
+    <div class="form-row">
       <div class="form-label">备注：</div>
       <input type="text" id="note" class="form-control" placeholder="可选" />
     </div>
@@ -193,48 +145,11 @@
     </div>
   </div>
 
-  <div class="summary" id="summary">
-    暂无数据
-  </div>
-
-  <div class="filter-section">
-    <div class="filter-row">
-      <label>筛选日期：</label>
-      <input type="date" id="filterDate" onchange="filterRecords()" />
-      <button class="btn" style="background:#6c757d;" onclick="clearFilter()">清除筛选</button>
-      <button class="btn export-btn" onclick="exportCSV()">导出 CSV</button>
-    </div>
-    <div style="margin-top:15px; padding-top:15px; border-top:1px solid #eee;">
-      <label>批量导入：</label>
-      <input type="file" id="importFile" accept=".csv" style="display:inline-block; width:auto; margin-right:10px;" />
-      <button class="btn" style="background:#17a2b8;" onclick="importCSV()">导入数据</button>
-      <a href="accounting_template.csv" download="记账模板.csv" style="margin-left:10px; color:#17a2b8; text-decoration:underline;">下载模板</a>
-    </div>
-  </div>
-
-  <div class="table-container">
-    <table id="recordsTable">
-      <thead>
-        <tr>
-          <th>日期</th>
-          <th>类别</th>
-          <th>项目</th>
-          <th>凭证</th>
-          <th>支付方式</th>
-          <th>金额</th>
-          <th>备注</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody id="recordsBody"></tbody>
-    </table>
-  </div>
+  <a href="records_test.html" class="nav-link">查看所有记录</a>
 
   <script>
     // 初始化日期为今天
     document.getElementById('date').valueAsDate = new Date();
-
-    let records = JSON.parse(localStorage.getItem('accountingRecords') || '[]');
 
     const PROJECT_OPTIONS = {
       '收入': ['回款', '客户货款', '转账', '其他', '股金'],
@@ -258,34 +173,92 @@
       }
     }
 
-    function saveRecords() {
-      localStorage.setItem('accountingRecords', JSON.stringify(records));
-      render();
-    }
-
     function getVoucherNumber(date) {
-      const yearMonth = date.substring(0, 7); // "YYYY-MM"
+      const records = JSON.parse(localStorage.getItem('accountingRecords') || '[]');
+      const yearMonth = date.substring(0, 7);
       const monthRecords = records.filter(r => r.date.startsWith(yearMonth));
       return String(monthRecords.length + 1).padStart(3, '0');
     }
 
-    function addRecord() {
+    // 检查是否处于编辑模式
+    function checkEditMode() {
+      const editingRecord = JSON.parse(localStorage.getItem('editingRecord'));
+      if (editingRecord) {
+        document.getElementById('category').value = editingRecord.category;
+        updateProjectOptions();
+        document.getElementById('project').value = editingRecord.project;
+        document.getElementById('date').value = editingRecord.date;
+        document.getElementById('payment').value = editingRecord.payment;
+        document.getElementById('amount').value = editingRecord.amount;
+        document.getElementById('voucher').value = editingRecord.voucher;
+        document.getElementById('note').value = editingRecord.note || '';
+        document.querySelector('.form-actions button').textContent = '保存修改';
+        document.querySelector('.form-actions button').onclick = () => saveEdit(editingRecord.id);
+        localStorage.removeItem('editingRecord');
+      }
+    }
+
+    function saveEdit(id) {
       const amount = parseFloat(document.getElementById('amount').value);
       const category = document.getElementById('category').value;
       const date = document.getElementById('date').value;
       const project = document.getElementById('project').value;
       const payment = document.getElementById('payment').value;
       const note = document.getElementById('note').value.trim();
+      const voucher = document.getElementById('voucher').value;
 
       if (!amount || !category || !project || !date || !payment) {
         alert('请填写所有必填项');
         return;
       }
 
-      // 自动生成凭证号
+      const records = JSON.parse(localStorage.getItem('accountingRecords') || '[]');
+      const index = records.findIndex(r => r.id === id);
+      if (index !== -1) {
+        records[index] = { id, amount, category, date, voucher, project, payment, note };
+        localStorage.setItem('accountingRecords', JSON.stringify(records));
+        alert('修改已保存！');
+        window.location.href = 'records_test.html';
+      }
+    }
+
+    function convertImageToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+
+    async function addRecord() {
+      const amount = parseFloat(document.getElementById('amount').value);
+      const category = document.getElementById('category').value;
+      const date = document.getElementById('date').value;
+      const project = document.getElementById('project').value;
+      const payment = document.getElementById('payment').value;
+      const note = document.getElementById('note').value.trim();
+      const voucherImageInput = document.getElementById('voucherImage');
+
+      if (!amount || !category || !project || !date || !payment) {
+        alert('请填写所有必填项');
+        return;
+      }
+
       const voucher = getVoucherNumber(date);
       document.getElementById('voucher').value = voucher;
 
+      let voucherImage = '';
+      if (voucherImageInput.files[0]) {
+        try {
+          voucherImage = await convertImageToBase64(voucherImageInput.files[0]);
+        } catch (error) {
+          alert('图片处理失败：' + error.message);
+          return;
+        }
+      }
+
+      const records = JSON.parse(localStorage.getItem('accountingRecords') || '[]');
       records.push({ 
         id: Date.now(), 
         amount, 
@@ -294,11 +267,12 @@
         voucher, 
         project, 
         payment, 
-        note 
+        note,
+        voucherImage
       });
-      saveRecords();
+      localStorage.setItem('accountingRecords', JSON.stringify(records));
 
-      // 清空表单（保留凭证显示）
+      // 清空表单
       document.getElementById('amount').value = '';
       document.getElementById('category').value = '';
       document.getElementById('project').value = '';
@@ -306,175 +280,12 @@
       document.getElementById('note').value = '';
       document.getElementById('voucher').value = '';
       document.getElementById('date').valueAsDate = new Date();
-    }
-
-    function deleteRecord(id) {
-      if (confirm('确定删除这条记录？')) {
-        records = records.filter(r => r.id !== id);
-        saveRecords();
-      }
-    }
-
-    function getBalanceByPayment() {
-      const balances = {};
-      records.forEach(r => {
-        if (!balances[r.payment]) balances[r.payment] = 0;
-        balances[r.payment] += (r.category === '收入' ? r.amount : -r.amount);
-      });
-      return balances;
-    }
-
-    function render() {
-      const balances = getBalanceByPayment();
-      let summaryHTML = '';
-      for (const [payment, balance] of Object.entries(balances)) {
-        summaryHTML += `${payment}：¥${balance.toFixed(2)}<br>`;
-      }
-      if (!summaryHTML) summaryHTML = '暂无数据';
-      document.getElementById('summary').innerHTML = summaryHTML;
-
-      const filterDate = document.getElementById('filterDate').value;
-      const filtered = filterDate
-        ? records.filter(r => r.date === filterDate)
-        : records;
-
-      const tbody = document.getElementById('recordsBody');
-      tbody.innerHTML = filtered
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
-        .map(r => `
-          <tr>
-            <td>${r.date}</td>
-            <td>${r.category}</td>
-            <td>${r.project || '—'}</td>
-            <td>${r.voucher}</td>
-            <td>${r.payment || '—'}</td>
-            <td class="${r.category === '收入' ? 'income' : 'expense'}">
-              ${r.category === '收入' ? '+' : '−'}¥${r.amount.toFixed(2)}
-            </td>
-            <td>${r.note || '—'}</td>
-            <td><button class="btn" style="background:#dc3545;padding:4px 8px;font-size:13px;" onclick="deleteRecord(${r.id})">删除</button></td>
-          </tr>
-        `).join('');
-    }
-
-    function filterRecords() {
-      render();
-    }
-
-    function clearFilter() {
-      document.getElementById('filterDate').value = '';
-      render();
-    }
-
-    function exportCSV() {
-      if (records.length === 0) {
-        alert('没有数据可导出');
-        return;
-      }
-      let csv = '日期,类别,项目,支付方式,金额,备注\n';
-      csv += records.map(r =>
-        `"${r.date}",${r.category},"${r.project.replace(/"/g, '""')}","${r.payment.replace(/"/g, '""')}",${r.amount},"${r.note.replace(/"/g, '""')}"`
-      ).join('\n');
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = '记账记录.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    function parseCSV(text) {
-      const lines = text.trim().split('\n');
-      const headers = lines[0].split(',').map(h => h.trim());
-      const records = [];
       
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-        
-        // 简单 CSV 解析（处理带引号的字段）
-        const fields = [];
-        let inQuotes = false;
-        let current = '';
-        for (let j = 0; j < line.length; j++) {
-          const char = line[j];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            fields.push(current.trim());
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-        fields.push(current.trim());
-        
-        if (fields.length >= 5) {
-          const date = fields[headers.indexOf('日期')] || fields[0];
-          const category = fields[headers.indexOf('类别')] || fields[1];
-          const project = fields[headers.indexOf('项目')] || fields[2] || '';
-          const payment = fields[headers.indexOf('支付方式')] || fields[3];
-          const amount = parseFloat(fields[headers.indexOf('金额')] || fields[4]);
-          const note = fields[headers.indexOf('备注')] || fields[5] || '';
-          
-          if (date && category && payment && !isNaN(amount)) {
-            records.push({ date, category, project, payment, amount, note });
-          }
-        }
-      }
-      return records;
+      alert('记录已添加！');
     }
 
-    function importCSV() {
-      const fileInput = document.getElementById('importFile');
-      const file = fileInput.files[0];
-      if (!file) {
-        alert('请选择一个 CSV 文件');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const content = e.target.result;
-          const newRecords = parseCSV(content);
-          
-          if (newRecords.length === 0) {
-            alert('未解析到有效数据，请检查 CSV 格式');
-            return;
-          }
-
-          if (!confirm(`将导入 ${newRecords.length} 条记录，确认继续？`)) {
-            return;
-          }
-
-          // 生成凭证号并添加到主记录
-          newRecords.forEach(r => {
-            const voucher = getVoucherNumber(r.date);
-            records.push({
-              id: Date.now() + Math.random(),
-              ...r,
-              voucher
-            });
-          });
-
-          saveRecords();
-          fileInput.value = ''; // 清空文件选择
-          alert('导入成功！');
-        } catch (err) {
-          console.error(err);
-          alert('导入失败：' + err.message);
-        }
-      };
-      reader.readAsText(file, 'utf-8');
-    }
-
-    // 初始渲染
-    render();
+    // 初始化时检查编辑模式
+    checkEditMode();
   </script>
 </body>
 </html>
